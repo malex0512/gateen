@@ -1,14 +1,16 @@
 <!DOCTYPE html>
-<html lang="en"><head>
+<html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0A0A0A">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:,">
 <title>Tap to continue</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;800&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #0A0A0A;
@@ -26,7 +28,6 @@
     overflow: hidden;
   }
 
-  /* Background glow: green bloom in the middle */
   .stage {
     position: relative;
     min-height: 100vh;
@@ -91,6 +92,13 @@
   .btn:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
   .btn .arrow { font-weight: 500; }
 
+  .hint {
+    margin-top: 16px;
+    font-size: 13px;
+    color: #5f5f5f;
+    min-height: 18px;
+  }
+
   @keyframes pulse {
     0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset, 0 14px 44px rgba(0, 220, 100, .30); }
     50%      { box-shadow: 0 0 0 1px rgba(255,255,255,.12) inset, 0 14px 60px rgba(0, 220, 100, .55); }
@@ -105,11 +113,12 @@
 <main class="stage">
   <div class="content">
     <h1>Tap to continue</h1>
-    <p>Tap the button below to open this page in your browser.</p>
+    <p>Tap the button below to continue.</p>
     <button class="btn" id="go" type="button">
       <span>Continue</span>
-      <span class="arrow" aria-hidden="true">→</span>
+      <span class="arrow" aria-hidden="true">&rarr;</span>
     </button>
+    <div class="hint" id="hint"></div>
   </div>
 </main>
 
@@ -119,7 +128,7 @@
   var TARGET_URL = "https://freecash.securegate.workers.dev/";
   // ==============================
 
-  // Carry over the query string (ttclid, utm_*, etc.) so tracking survives the jump.
+  // Carry the query string (ttclid, utm_*, etc.) across the jump so tracking survives.
   function buildUrl() {
     try {
       var u = new URL(TARGET_URL);
@@ -137,13 +146,20 @@
   var isIOS = /iPhone|iPad|iPod/i.test(ua) ||
               (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-  function openExternal() {
+  function go() {
     var url = buildUrl();
     var u;
     try { u = new URL(url); } catch (e) { window.location.href = url; return; }
 
     if (isAndroid) {
-      // Android intent: hands the URL to the default browser instead of the TikTok webview.
+      // Hand the URL to Chrome via an Android intent. If the app actually switches
+      // away, the page goes hidden and we cancel the in-webview fallback. If the
+      // intent silently fails (some TikTok webview builds), the fallback fires and
+      // the lander still loads in place instead of dead-ending.
+      var fallback = setTimeout(function () { window.location.href = url; }, 1500);
+      document.addEventListener("visibilitychange", function () {
+        if (document.hidden) clearTimeout(fallback);
+      });
       var path = u.host + u.pathname + u.search + u.hash;
       window.location.href =
         "intent://" + path +
@@ -153,20 +169,20 @@
       return;
     }
 
-    if (isIOS) {
-      // iOS has no official escape hatch; try Safari's scheme, then fall back to a normal navigation.
-      var fallback = setTimeout(function () { window.location.href = url; }, 900);
-      document.addEventListener("visibilitychange", function () {
-        if (document.hidden) clearTimeout(fallback);
-      });
-      window.location.href = "x-safari-" + url;
-      return;
+    // iOS and everything else: there is no reliable way to force an in-app webview
+    // out to Safari anymore (the old x-safari- scheme is dead). So we stop fighting
+    // it and send the user straight to the lander. It loads here, the CTA works, and
+    // the TapRain redirect is a server-side 302 that logs the click regardless of
+    // which browser they're in. Getting them to the offer beats a dead screen.
+    var hint = document.getElementById("hint");
+    if (isIOS && hint) {
+      hint.textContent = "For signup, you can also tap ⋯ → Open in Browser";
     }
-
-    window.location.href = url; // desktop / anything else
+    window.location.href = url;
   }
 
-  document.getElementById("go").addEventListener("click", openExternal);
+  document.getElementById("go").addEventListener("click", go);
 })();
 </script>
-</body></html>
+</body>
+</html>
